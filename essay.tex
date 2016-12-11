@@ -1,0 +1,146 @@
+\documentclass[12pt, a4paper]{article}
+\usepackage[english]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+
+\begin{document}
+\begin{titlepage}
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+\center
+\textsc{\LARGE Uppsala Universitet}\\[1.5cm]
+\HRule \\[0.4cm]
+{ \huge \bfseries J29 - Jämför två metoder för skräpsamling}\\[0.4cm]
+\HRule \\[1.5cm]
+\emph{Author: Simon Berntsson - sibe6748 - 19920922-3511}\\
+IOOPM 2016/2017\\
+\vspace{1cm}
+~
+{\large \today}\\[3cm]
+
+
+\vfill
+\end{titlepage}
+\tableofcontents\newpage
+\section{Introduktion}
+En skräpsamlare är en metod för automatisk minneshantering och används för att programmeraren ska slippa tänka på när man kan frigöra minne för data.\\
+Skräpsamlaren körs alltså tillsammans med programmet och hanterar alla allokeringar och frigörelser av minne åt programmeraren.
+\subsection{Tekniska termer och förkortningar}
+\begin{description}
+\item [GC] Skräpsamlare
+\item [Rötter]  Pekare som ligger i programmets stack, alltså längst upp i kedjor av pekare som programmet använder.
+
+\end{description}
+
+\newpage
+%
+%
+%
+%
+%
+\section{Reference Counting (RC/RCGC)}
+\subsection{Koncept}
+Referensräknande skräpsamlare är en simpel skräpsamlingsmetod där varje objekt i minnet har en räknare över hur många pekare som pekare till det.\\
+%
+Varje gång ett objekt refereras, så ökar referensräknaren med ett. Samma sak men omvänt sker då en pekare som pekade till ett objekt tas bort eller förändras - den sänks med ett.\\
+%
+Ett objekt som inget pekar på, alltså noll (0) referenser, räknas som skräp och tas bort av skräpsamlaren.\cite{WikiRefc}
+%
+\subsection{Fördelar}
+%
+\subsubsection{Realtid}
+Den största skillnaden med RCGC är att den tar bort skräpdata så fort det klassas som skräp. I system med begränsat minne, eller när objekten tar upp en väldigt stor del av minnet, är detta en viktig aspekt eftersom man annars skulle få väldigt många avbrott när minnet blev fullt.
+\subsection{Nackdelar}
+%
+\subsubsection{Cykliska referenser}
+RCGC klassar inte en cyklisk datastruktur som skräp, även om det inte går att nå från rötterna. Som exempel kan man tänka sig två objekt som båda pekar på varandra, men inga rötter leder dit. Då kommer båda objekten att ha en referens, vilket RCGCn kommer betrakta som icke-skräp.
+%
+\subsubsection{Overhead}
+Eftersom varje objekt måste ha en räknar kommer det tillgängliga minnet att "bli mindre" eftersom varje objekt blir större.
+\newpage
+%
+%
+%
+
+\section{Mark-sweep Garbage Collector (MSGC)}
+\subsection{Grundläggande MSGC}
+MSGC är av sorten tracing (på sv. spårande) GC's och var den första sortens skräpsamlare som utvecklades som kunde hantera cykliska datastrukturer.\\
+När MSGC används ackumuleras orefererade objekt tills minnet blir fullt. Skräpsamlaren pausar sedan körningen av programmet medan den frigör alla orefererade objekt.\\
+När alla orefererade objekt är frigjorda återupptas programmets körning.\\
+%
+Skräpsamlingen delas alltså upp i två faser: markering och uppsamling (Mark and Sweep).\cite{msgc}
+%
+\subsubsection{Fas 1: Markering}
+Varje objekt erhåller ett booleskt värde som håller markeringsstatus. Om markeringsstatusen är sann så är datat nåbart från rötterna. Om det är falskt innebär det att datat inte går att nå från rötterna.\\
+%
+Alla objekts markeringsstatus initieras som falskt, eftersom det är möjligt att allokera minne utan att spara pekaren till objektet.
+Om man skulle initiera statusen som sann skulle man till exempel får minnesläckage om man anropar en funktion som allokerar minne utan att spara dess returnerade pekare.\\
+%
+\subsubsection{Fas 2: Uppsamling}
+MS-skräpsamlaren markerar (fas 1) kontinuerligt objekt i minnet under körtid, och inleder fas 2 när minnet är fullt. När den ska börja rensa skräpdata pausar den körningen av programmet och läser genom heapen efter objekt med "falsk" markeringsstatus och tar bort dessa.
+
+\subsubsection{Fördelar}
+%
+\subsubsection{Kan frigöra cykliska datastrukturer}
+Till skillnad från RFGC har en MSGC möjligheten att klassa cykliska datastrukturer som skräp. Detta eftersom markeringsstatusen endast är sann om det går att nå från rötterna.
+%
+\subsection{Nackdelar}
+%
+\subsubsection{Pausar körning}
+Eftersom skräpsamlaren pausar körning av programmet under uppsamlingsfasen, så kommer programmet att stanna upp under tiden skräpsamlaren färdigställer uppsamlingen. 
+Detta innebär att det i princip blir omöjligt att använda en sådan skräpsamlare tillsammans med tidskänsliga eller realtidsapplikationer. Ett exempel är realtidsspel där det inte får förekomma att programmet stannar upp, ens för några millisekunder.
+%
+\subsubsection{Kräver stora genomsökningar av minnet}
+För att samla ihop skräpdata måste skräpsamlaren söka genom heapen flera gånger.
+\subsubsection{Overhead}
+Även en MSGC får en overhead, men till skillnad från RFGC som behöver en heltalsräknare så kräver denna bara en boolean, vilket är mycket "billigare" och har mindre påverkan på hur mycket minne som går att använda.
+%
+\newpage
+\subsection{Tricolor MSGC}
+\subsubsection{Abstrakt uppdelning av minnet}
+Ett sätt att motverka ineffektiviteten hos vanliga MSGC är att dela upp objekt i tre grupper, i detta fallet färgerna vit, grå och svart.
+Den vita gruppen består av objekt som möjligen kan tas bort.
+Den svarta gruppen består av objekt som man kan visa inte pekar på något objekt i den vita gruppen och går att nås från programmets rötter. Det medför att inget objekt i den svarta gruppen går att ta bort.
+Den grå gruppen består av alla objekt som kan nås från rötterna, men som ännu inte har sökts igenom efter referenser till vita objekt. Eftersom alla dessa går att nå från rötterna kommer de efter skräpsamlarens genomsökning att bli klassade som svarta.
+
+Den svarta gruppen börjar som tom, den grå gruppen är alla objekt som går att nå direkt från rötterna och den vita gruppen inkluderar alla andra objekt i minnet.
+Varje objekt i minnet är alltid exklusivt i en av de tre grupperna.
+
+Med hjälp av denna abstraktion fungerar skräpsamlaren såhär:
+\begin{itemize}
+\item Välj ett objekt från den grå gruppen och flytta den till den svarta gruppen.
+\item Flytta varje objekt i den vita gruppen, som det numera svarta objektet pekade till, till den grå gruppen.
+När den grå gruppen är tom är genomsökningen färdig. De svarta objekten är nåbara från rötterna och de vita objekten är inte nåbara, alltså skräp, och kan tas bort.
+\item Upprepa de två stegen ovan till den grå gruppen är tom.
+\end{itemize}\cite{WikiRefc}
+%
+%
+%
+\subsection{Fördelar}
+Tri-color-metodens största fördel är att den kan utföra skräpsamlingen under körtid, utan att behöva pausa programmets körning under längre perioder. Detta eftersom den markerar objekt medans de allokeras och när dom förändras, vilket bibehåller deras grupperingar.
+Genom att kontrollera storleken på grupperna kan skräpsamlaren samla upp skräpdata kontinuerligt istället för när minnet är fullt.\\
+%
+En annan fördel är att skräpsamlaren inte behöver gå igenom hela minnet, utan kan ignorera svarta gruppen under uppsamlingen.
+\newpage
+%
+
+\section{Avslutning}
+\subsection{Reference Counting vs. Mark-and-Sweep}
+Reference countings stora fördel är realtidsskräpsamlingen, men med Tricolor-MSGC går det att minimera pausandet av program till en rimlig nivå.\\
+MSGC är överlägsen RFGC när det kommer till cykliska datastrukturer.\\
+%
+Tricolor-MSGC verkar överlägset när man jämför för- och nackdelar.
+
+\begin{thebibliography}{Källor}
+
+\bibitem{WikiRefc}
+	\href{https://en.wikipedia.org/wiki/Reference_counting}{Wikipedia: Reference Counting}
+    [Åtkommen: 11 Dec 2016]
+\bibitem{msgc}
+	\href{http://www.brpreiss.com/books/opus5/html/page424.html}{Data Structures and Algorithms with Object-Oriented Design Patterns in Java}
+    [Åtkommen: 11 Dec 2016]
+
+
+\end{thebibliography}
+
+\end{document}
